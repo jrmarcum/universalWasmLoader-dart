@@ -1,0 +1,102 @@
+name: Publish
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      # NOTE: This org's Actions policy only permits actions owned by `jrmarcum`.
+      # Third-party `uses:` steps (actions/checkout, dart-lang/setup-dart, and the
+      # official dart-lang/setup-dart/.github/workflows/publish.yml reusable OIDC
+      # workflow) cause a `startup_failure` — the workflow never runs a single step.
+      # Every step here MUST therefore be a plain `run:` step: checkout via git
+      # clone, install the Dart SDK via run:, and publish via the `dart pub` CLI.
+      # Because the official pub.dev OIDC automated-publishing reusable workflow is
+      # off-limits, this uses a credentials-file approach instead (PUB_DEV_CREDENTIALS
+      # secret → pub-credentials.json), then `dart pub publish --force`.
+      - name: Checkout
+        run: |
+          git clone --depth=1 --branch "${{ github.ref_name }}" \
+            "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" .
+
+      - name: Install Dart SDK
+        run: |
+          set -euo pipefail
+          # Official Dart apt repository (Debian/Ubuntu). All plain `run:` — no
+          # third-party action involved.
+          sudo apt-get update
+          sudo apt-get install -y apt-transport-https wget gnupg
+          wget -qO- https://dl-ssl.google.com/linux/linux_signing_key.pub \
+            | sudo gpg --dearmor -o /usr/share/keyrings/dart.gpg
+          echo "deb [signed-by=/usr/share/keyrings/dart.gpg arch=amd64] https://storage.googleapis.com/download.dartlang.org/linux/debian stable main" \
+            | sudo tee /etc/apt/sources.list.d/dart_stable.list
+          sudo apt-get update
+          sudo apt-get install -y dart
+          echo "/usr/lib/dart/bin" >> "$GITHUB_PATH"
+
+      - name: Show Dart version
+        run: dart --version
+
+      - name: Install dependencies
+        run: dart pub get
+
+      - name: Analyze
+        run: dart analyze
+
+      - name: Test (best-effort, needs a browser)
+        run: |
+          set -euo pipefail
+          # The package is web-only; its tests are `@TestOn('browser')` and need a
+          # Chrome/Chromium. ubuntu-latest usually ships Chrome preinstalled, but we
+          # do not hard-fail the publish if it is missing or the run errors.
+          if command -v google-chrome >/dev/null 2>&1 \
+            || command -v google-chrome-stable >/dev/null 2>&1 \
+            || command -v chromium >/dev/null 2>&1 \
+            || command -v chromium-browser >/dev/null 2>&1; then
+            echo "Chrome found — running browser tests."
+            dart test -p chrome || echo "::warning::dart test -p chrome failed; continuing to publish."
+          else
+            echo "::warning::No Chrome/Chromium on the runner — skipping browser tests."
+          fi
+
+      - name: Write pub.dev credentials
+        env:
+          PUB_DEV_CREDENTIALS: ${{ secrets.PUB_DEV_CREDENTIALS }}
+        run: |
+          set -euo pipefail
+          if [ -z "${PUB_DEV_CREDENTIALS:-}" ]; then
+            echo "::error::PUB_DEV_CREDENTIALS secret is empty. Generate it locally with \`dart pub login\` and copy the resulting pub-credentials.json into the repo secret. See README.md → Releasing."
+            exit 1
+          fi
+          # On Linux, `dart pub` reads credentials from $PUB_CACHE if set, otherwise
+          # from $XDG_CONFIG_HOME/dart/ (falling back to $HOME/.config/dart/).
+          # Write to all candidate locations so the path is correct regardless of
+          # the runner's default. The file is pub-credentials.json (newer SDKs);
+          # older SDKs used credentials.json under $PUB_CACHE — write both names.
+          mkdir -p "$HOME/.config/dart"
+          printf '%s' "$PUB_DEV_CREDENTIALS" > "$HOME/.config/dart/pub-credentials.json"
+          if [ -n "${XDG_CONFIG_HOME:-}" ]; then
+            mkdir -p "$XDG_CONFIG_HOME/dart"
+            printf '%s' "$PUB_DEV_CREDENTIALS" > "$XDG_CONFIG_HOME/dart/pub-credentials.json"
+          fi
+          mkdir -p "$HOME/.pub-cache"
+          printf '%s' "$PUB_DEV_CREDENTIALS" > "$HOME/.pub-cache/credentials.json"
+          echo "Credentials written."
+
+      - name: Publish to pub.dev
+        run: dart pub publish --force
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "${GITHUB_REF_NAME}" \
+            --generate-notes

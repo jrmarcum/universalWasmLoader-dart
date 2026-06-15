@@ -85,8 +85,53 @@ convention from the start — there is **no legacy out-parameter code to migrate
 (`math_50` / `booleans_50` / `strings_50` / `imports_50`) plus the lifecycle scenarios
 (`createSingleton`, `InstancePool`). `strings_50.wasm` exercises the canonical return path.
 
-## Release flow (planned)
+## Release flow (implemented 2026-06-15)
 
-Version lives in `pubspec.yaml` (`version:`). Bump it, then publish to pub.dev via `dart pub publish`
-(dry-run with `dart pub publish --dry-run` first). A GitHub Action equivalent of the other ports can
-tag `vX.Y.Z` and publish. See the per-language publishing matrix in the wasmtk `cmem/vision.md`.
+**Version source:** `pubspec.yaml` (`version:`) is the single source of truth.
+
+**Bump → tag → push:**
+
+1. `dart run scripts/bump.dart [patch|minor|major]` (default `patch`) — or the pure-POSIX
+   `scripts/bump.sh` — raises the `version:` line with a targeted edit (rest of the file untouched).
+   Mirrors `-js`'s `scripts/bump.ts` UX.
+2. `scripts/release.sh` — commits a pending pubspec bump, tags `vX.Y.Z` from the current
+   `pubspec.yaml` version, and pushes the tag. It NEVER runs `dart pub publish` locally (mirrors
+   `-js`'s `scripts/publish.ts`, which only tags + pushes so CI publishes).
+3. The pushed `v*` tag triggers `.github/workflows/publish.yml`, which publishes to pub.dev.
+
+**`.github/workflows/publish.yml` — `run:`-only (org Actions policy).** This org permits only
+`jrmarcum`-owned actions; ANY third-party `uses:` step (incl. `actions/checkout`, `dart-lang/setup-dart`,
+and the official `dart-lang/setup-dart/.github/workflows/publish.yml` reusable OIDC workflow) causes a
+`startup_failure` — nothing runs. So every step is a plain `run:` step:
+- checkout via `git clone --depth=1 --branch <tag> https://x-access-token:<token>@github.com/<repo> .`
+- install the Dart SDK from the official Dart apt repo (`/usr/lib/dart/bin` → `$GITHUB_PATH`)
+- `dart pub get`, `dart analyze`, best-effort `dart test -p chrome` (web-only package; skipped with a
+  logged `::warning::` if no Chrome on the runner — does not block publish)
+- write the `PUB_DEV_CREDENTIALS` secret to `pub-credentials.json` (in `$HOME/.config/dart/`,
+  `$XDG_CONFIG_HOME/dart/` if set, and `$HOME/.pub-cache/credentials.json` for older SDKs), then
+  `dart pub publish --force`
+- `gh release create` for the tag
+
+**Why credentials-file, not OIDC:** the official pub.dev automated-publishing path is the
+`dart-lang/setup-dart/.github/workflows/publish.yml` reusable workflow — a third-party `uses:`,
+forbidden by org policy. So we use a credentials-file publish in `run:` steps instead.
+
+### Required owner setup (one-time)
+
+1. **Own the package on pub.dev.** The package name `universal_wasm_loader` must be created/owned by
+   the publishing account (a verified publisher is recommended if used). First publish of a brand-new
+   name will create it under your account.
+2. **Generate the `PUB_DEV_CREDENTIALS` secret.** Locally run `dart pub login` and complete the
+   Google OAuth flow. This writes `pub-credentials.json` to Dart's config dir:
+   - Linux: `$XDG_CONFIG_HOME/dart/pub-credentials.json` (or `~/.config/dart/pub-credentials.json`)
+   - Windows: `%APPDATA%\dart\pub-credentials.json`
+   - macOS: `~/Library/Application Support/dart/pub-credentials.json`
+   Copy the FULL JSON contents of that file into a GitHub repo secret named **`PUB_DEV_CREDENTIALS`**
+   (Settings → Secrets and variables → Actions → New repository secret). It contains a refresh token,
+   so treat it as sensitive; rotate by re-running `dart pub login` and updating the secret.
+
+### Validation (no publish performed)
+
+`dart pub publish --dry-run` (Dart 3.12.2) validates the package without uploading: **0 warnings,
+exit 0** after `CHANGELOG.md` was added. Both bump scripts verified for patch/minor/major + bad-kind
+rejection, leaving `pubspec.yaml` at `0.1.0`. No real publish and no push were performed.

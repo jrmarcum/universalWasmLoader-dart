@@ -72,3 +72,40 @@ dart test -p chrome   # requires a Chrome/Chromium browser
 
 Tests run against the `wasmtk` reference fixtures (`math_50`, `booleans_50`, `strings_50`,
 `imports_50`) in `test/fixtures/`, covering the SPEC §8 suite plus the lifecycle scenarios.
+
+## Releasing
+
+The package version lives in **`pubspec.yaml`** (`version:`) — the single source of truth.
+
+```bash
+# 1. Raise the version (default: patch). Pure-POSIX alt: scripts/bump.sh
+dart run scripts/bump.dart            # 0.1.0 → 0.1.1
+dart run scripts/bump.dart minor      # 0.1.0 → 0.2.0
+dart run scripts/bump.dart major      # 0.1.0 → 1.0.0
+
+# 2. (optional) Validate the package without uploading.
+dart pub publish --dry-run
+
+# 3. Tag vX.Y.Z from pubspec.yaml and push — this triggers CI to publish.
+scripts/release.sh
+```
+
+Pushing a `v*` tag runs `.github/workflows/publish.yml`, which installs the Dart SDK and runs
+`dart pub publish` on pub.dev.
+
+> **`run:`-only workflow.** This org's GitHub Actions policy permits only `jrmarcum`-owned actions, so
+> the publish workflow uses **no `uses:` steps** — checkout is `git clone`, the SDK is installed via
+> the Dart apt repo, and publishing is the `dart pub` CLI. The official pub.dev OIDC automated-publishing
+> reusable workflow (`dart-lang/setup-dart/.github/workflows/publish.yml`) is a third-party action and
+> therefore **cannot be used here**; we publish with a credentials file instead.
+
+### Owner setup (one-time)
+
+1. **Own the package on pub.dev.** `universal_wasm_loader` must be created/owned by the publishing
+   account (use a verified publisher if desired). The first publish of a new name creates it.
+2. **Create the `PUB_DEV_CREDENTIALS` repo secret.** Run `dart pub login` locally and complete the
+   Google OAuth flow; this writes `pub-credentials.json` to Dart's config dir
+   (Linux `~/.config/dart/`, Windows `%APPDATA%\dart\`, macOS `~/Library/Application Support/dart/`).
+   Copy the **entire JSON** into a GitHub Actions secret named `PUB_DEV_CREDENTIALS`
+   (Settings → Secrets and variables → Actions). It holds a refresh token — keep it secret; rotate by
+   re-running `dart pub login` and updating the secret.
