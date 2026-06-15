@@ -12,11 +12,20 @@ WIT auto-detection, the `@N` version pin, and the full Canonical ABI (numerics p
 1/0 ↔ true/false; string params via `cabi_realloc(0,0,1,len)`; string returns via the
 callee-allocated `[ptr,len]` pair + `cabi_post_<name>` release) are in place.
 
-### Runtime decision — RESOLVED: web-first via `dart:js_interop`
+### Runtime decision — dual-backend (web now, native later)
 
-The OPEN runtime decision is resolved in favor of the **web** path (browser `WebAssembly`), the
-cheapest implementation with no native build step. A native Dart-VM backend (wasmtime via
-`dart:ffi`) remains a possible future addition but is out of scope here.
+Dart is the **only** loader language that spans both worlds, so it is **dual-backend** (owner,
+2026-06-15; see wasmtk `cmem/vision.md` → "Loader runtime + WASI strategy"):
+- **Web backend (THIS, implemented):** browser `WebAssembly` via `dart:js_interop` + a hand-rolled
+  WASI-P1 shim — the cheapest path, no native build step.
+- **Native backend (TRACKED FUTURE):** `dart:ffi` → the **wasmtime C API** (Dart VM / Flutter
+  desktop+mobile), getting wasmtime's built-in WASI. Selected vs. the web backend via conditional
+  imports. Blocked only by the `libwasmtime` distribution cost (per-platform native binaries /
+  native-assets) — its own mini-project, hence deferred.
+
+Note: a Dart **web** app could instead `dart:js_interop`-call the published `-js` loader directly, but
+that re-adds a JS dependency and works on web only; the native-Dart web impl here is preferred. The JS
+loader CANNOT substitute on native (`dart:ffi` is unavailable on web; no JS engine on the Dart VM).
 
 ### File layout
 
