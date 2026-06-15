@@ -4,12 +4,52 @@ The **Dart** port of the Universal WASM Loader (Stage 2 of the polyglot loader e
 `universalWasmLoader-js` is the reference, and `SPEC.md` is the cross-language contract). Intended to
 publish to **pub.dev**.
 
-## Status — fresh stub (created 2026-06-15)
+## Status — implemented, web-first (2026-06-15)
 
-The repo was just initialized: `README.md`, `LICENSE` (MIT, Jon Marcum), `.gitignore` (Dart), this
-`cmem/`, and a `CLAUDE.md`. **No `pubspec.yaml`, no `lib/` source, no tests yet.** Nothing is
-implemented — this file records the intended shape so a future session can build it correctly the
-first time.
+Implemented against **SPEC 3.0.0** as a **web-only** package using `dart:js_interop` over the
+browser's native `WebAssembly` + `fetch`. All of `wasmImport` / `createSingleton` / `InstancePool`,
+WIT auto-detection, the `@N` version pin, and the full Canonical ABI (numerics pass-through; `bool`
+1/0 ↔ true/false; string params via `cabi_realloc(0,0,1,len)`; string returns via the
+callee-allocated `[ptr,len]` pair + `cabi_post_<name>` release) are in place.
+
+### Runtime decision — RESOLVED: web-first via `dart:js_interop`
+
+The OPEN runtime decision is resolved in favor of the **web** path (browser `WebAssembly`), the
+cheapest implementation with no native build step. A native Dart-VM backend (wasmtime via
+`dart:ffi`) remains a possible future addition but is out of scope here.
+
+### File layout
+
+- `pubspec.yaml` — package `universal_wasm_loader`, version `0.1.0`, SDK `^3.4.0`; deps `web`,
+  dev-deps `test` + `lints`.
+- `analysis_options.yaml` — `package:lints/recommended` + `strict-casts`.
+- `lib/universal_wasm_loader.dart` — public barrel (exports `wasmImport`, `createSingleton`,
+  `InstancePool`, `ModuleExports`, the WIT parser surface).
+- `lib/src/wit_parser.dart` — `parseWit` + `WitFunc`/`WitParam`/`ParsedWit` + kebab helpers.
+- `lib/src/wasm_interop.dart` — `@JS` bindings for `WebAssembly.instantiate`, `fetch`,
+  `Reflect.get/set`, memory views (`memoryBytes`, `readI32`).
+- `lib/src/abi.dart` — `buildComponentImportEnv` / `buildComponentExportProxy` + the `ModuleExports`
+  handle (`call`/`function`/`has`/`names`/`rawExports`).
+- `lib/src/loader.dart` — `wasmImport`, `createSingleton`, `InstancePool`, version-suffix parsing,
+  version-global assertion.
+- `test/loader_test.dart` (`@TestOn('browser')`) + `test/fixtures/*.{wasm,wit}` (the four
+  `*_50` reference fixtures).
+
+### Verification level — `dart analyze` clean + browser tests PASS
+
+Dart SDK 3.12.2 (bundled in the scoop Flutter 3.44.2 install). `dart analyze` → **No issues found**;
+`dart format .` clean. **`dart test -p chrome` ran in real Chrome and all 7 tests passed** (math,
+booleans, strings incl. the Canonical string return, imports with host callbacks, `createSingleton`
+identity, `InstancePool.run`, 2 concurrent pooled runs).
+
+### Key js_interop note (gotcha)
+
+WASM calls each `env` import with the **flattened ABI arity** (a `string` param is two i32s). The
+Dart closure handed to `.toJS` must tolerate that exact count — a fixed-arity closure throws
+`NoSuchMethodError` when invoked with fewer args. The import wrappers use **optional positional
+params** (8 slots) so any arity 0..8 is accepted. Export calls use `Function.prototype.apply`
+(bound via `@JS('Function.prototype.apply.call')`) to pass an arbitrary arg count, since
+`callAsFunction` is fixed at 4.
 
 ## Intended API surface
 
