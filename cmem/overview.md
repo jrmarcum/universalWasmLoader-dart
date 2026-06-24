@@ -4,7 +4,13 @@ The **Dart** port of the Universal WASM Loader (Stage 2 of the polyglot loader e
 `universalWasmLoader-js` is the reference, and `SPEC.md` is the cross-language contract). Intended to
 publish to **pub.dev**.
 
-## Status — implemented, web-first (2026-06-15)
+## Status — PUBLISHED to pub.dev, web-first (first publish 2026-06-24)
+
+**`universal_wasm_loader` 0.1.0 is live on https://pub.dev/packages/universal_wasm_loader**
+(first publish 2026-06-24 via the CI workflow — conclusion `success`; tag `v0.1.0`; GitHub Release
+`v0.1.0` created). It was a brand-new name, so the `jrmarcum` account is the uploader/owner;
+**not** under a pub.dev verified publisher (a future publish could carry one if set up first).
+The `PUB_DEV_CREDENTIALS` repo secret is in place, so subsequent releases need only bump + tag.
 
 Implemented against **SPEC 3.0.0** as a **web-only** package using `dart:js_interop` over the
 browser's native `WebAssembly` + `fetch`. All of `wasmImport` / `createSingleton` / `InstancePool`,
@@ -31,6 +37,7 @@ loader CANNOT substitute on native (`dart:ffi` is unavailable on web; no JS engi
 
 - `pubspec.yaml` — package `universal_wasm_loader`, version `0.1.0`, SDK `^3.4.0`; deps `web`,
   dev-deps `test` + `lints`.
+- `.pubignore` — excludes `cmem/`, `scripts/`, `CLAUDE.md` from the published pub.dev archive.
 - `analysis_options.yaml` — `package:lints/recommended` + `strict-casts`.
 - `lib/universal_wasm_loader.dart` — public barrel (exports `wasmImport`, `createSingleton`,
   `InstancePool`, `ModuleExports`, the WIT parser surface).
@@ -139,8 +146,19 @@ forbidden by org policy. So we use a credentials-file publish in `run:` steps in
    (Settings → Secrets and variables → Actions → New repository secret). It contains a refresh token,
    so treat it as sensitive; rotate by re-running `dart pub login` and updating the secret.
 
-### Validation (no publish performed)
+### Published archive contents — `.pubignore` (added 2026-06-24)
 
-`dart pub publish --dry-run` (Dart 3.12.2) validates the package without uploading: **0 warnings,
-exit 0** after `CHANGELOG.md` was added. Both bump scripts verified for patch/minor/major + bad-kind
-rejection, leaving `pubspec.yaml` at `0.1.0`. No real publish and no push were performed.
+A root `.pubignore` (gitignore syntax; consulted only by `dart pub publish`) keeps internal files in
+git but **out of the published tarball**: `cmem/`, `scripts/`, and `CLAUDE.md`. This shrank the
+archive from **19 KB → 12 KB**; `dart pub publish --dry-run` stays at **0 warnings**. The published
+tree is `lib/`, `test/` (incl. `*.wasm`/`*.wit` fixtures), `README.md`, `CHANGELOG.md`, `LICENSE`,
+`pubspec.yaml`, `analysis_options.yaml`.
+
+### First publish (2026-06-24) — DONE via CI
+
+`dart pub publish --dry-run` (Dart 3.12.2) had previously validated 0-warnings/exit-0. The real
+publish was performed by the CI flow: `scripts/release.sh` committed the `.pubignore` change, tagged
+`v0.1.0` from `pubspec.yaml`, and pushed `main` + the tag; `.github/workflows/publish.yml` ran to
+**success** and uploaded to pub.dev (verified: `GET pub.dev/api/packages/universal_wasm_loader` →
+200, `"version":"0.1.0"`). Both bump scripts remain verified for patch/minor/major + bad-kind
+rejection.

@@ -11,6 +11,14 @@ the Canonical ABI (wasmtime profile), and get back a typed handle.
 > `dart:js_interop` over the browser's native `WebAssembly` and `fetch`. There is no Dart-VM /
 > native runtime yet (see *Runtime* below).
 
+## Install
+
+Published on pub.dev: **[universal_wasm_loader](https://pub.dev/packages/universal_wasm_loader)**.
+
+```bash
+dart pub add universal_wasm_loader
+```
+
 ## Usage
 
 ```dart

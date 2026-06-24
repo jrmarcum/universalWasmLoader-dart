@@ -30,4 +30,4 @@ comprehensive audit across tested AND untested paths for: (1) workarounds / temp
 
 | File | What it holds |
 | --- | --- |
-| [overview.md](overview.md) | What this loader port is, its language/runtime, API surface, ABI/SPEC conformance status, tests, and release flow |
+| [overview.md](overview.md) | What this loader port is, its language/runtime, API surface, ABI/SPEC conformance status, tests, release flow, and pub.dev publish status (PUBLISHED 0.1.0) |
