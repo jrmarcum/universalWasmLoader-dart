@@ -1,0 +1,11 @@
+# Files kept in git but excluded from the published pub.dev archive.
+# Syntax mirrors .gitignore; only `dart pub publish` consults this file.
+
+# Internal, portable project memory — not useful to package consumers.
+cmem/
+
+# Release tooling (bump/tag/push) — not useful to package consumers.
+scripts/
+
+# Agent/instruction file — internal only.
+CLAUDE.md
